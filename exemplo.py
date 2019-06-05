@@ -9,6 +9,8 @@ import subprocess
 import time
 import threading
 import logging
+import sys
+import getopt
 
 logging.basicConfig(filename='app.log', level=logging.DEBUG)
 
@@ -29,6 +31,31 @@ comandosSeat = [
 	['xset', 's', 'noblank'],
 	['xset', 's', 'off'],
 	['xset', '-q']
+]
+
+xorg_confBase1 = [
+	'Section "ServerLayout"',
+	'	Identifier "X.org gerado pelo Multiseater"',
+	'	Option "Standbytime" "0"',
+	'	Option "SuspendTime" "0"',
+	'	Option "Offtime" "0"',
+	'	InputDevice "Mouse0" "CorePointer"',
+	'	InputDevice "Keyboard0" "CoreKeyboard"'
+]
+
+xorg_confBase2 = [
+	'EndSection',
+	' ',
+	'Section "InputDevice"',
+	'	Identifier "Keyboard0"',
+	'	Driver "kbd"',
+	'EndSection',
+	' ',
+	'Section "InputDevice"',
+	'	Identifier "Mouse0"',
+	'	Driver "mouse"',
+	'EndSection',
+	' '
 ]
 
 lockDevices = threading.Lock()
@@ -394,6 +421,58 @@ class SessaoMultiseat:
 
 		for seatThread in self.seats:
 			seatThread.start()
+	def escreverXorg(self):
+		f = open('xorgGerado.conf', 'w')
+
+		xorg_confBase = []
+		xorg_confBase.extend(xorg_confBase1)
+		sessaoMonitores = []
+		sessaoDevices = []
+		sessaoScreens = []
+
+		nSeat = 0
+		for seat in self.jsonResultante['videos']:
+			sessaoMonitores.append('Section "Monitor"')
+			sessaoMonitores.append('	Identifier "Monitor' + str(nSeat) + '"')
+			sessaoMonitores.append('EndSection')
+			sessaoMonitores.append(' ')
+
+			sessaoDevices.append('Section "Device"')
+			sessaoDevices.append('	Identifier "PlacaVideo' + str(nSeat) + '"')
+			sessaoDevices.append('	Driver "' + seat['driver'] + '"')
+			sessaoDevices.append('	BusID "' + seat['busID'] + '"')
+			if('extra' in seat):
+				for extra in seat['extra']:
+					sessaoDevices.append('	' + extra)
+			sessaoDevices.append('EndSection')
+			sessaoDevices.append(' ')
+
+			sessaoScreens.append('Section "Screen"')
+			sessaoScreens.append('	Identifier "Screen' + str(nSeat) + '"')
+			sessaoScreens.append('	Device "PlacaVideo' + str(nSeat) + '"')
+			sessaoScreens.append('	Monitor "Monitor' + str(nSeat) + '"')
+			sessaoScreens.append('EndSection')
+			sessaoScreens.append(' ')
+
+			linhaScreen = '	Screen ' + str(nSeat) + ' "Screen' + str(nSeat) + '" '
+			if(nSeat == 0):
+				linhaScreen += '0 0'
+			else:
+				linhaScreen += 'RightOf "Screen' + str(nSeat-1) + '"'
+			xorg_confBase.append(linhaScreen)
+			nSeat += 1
+
+		xorg_confBase.extend(xorg_confBase2)
+		xorg_confBase.extend(sessaoMonitores)
+		xorg_confBase.extend(sessaoDevices)
+		xorg_confBase.extend(sessaoScreens)
+		for linha in xorg_confBase:
+			f.write(linha + '\n')
+
+		f.close()
+	def inicializaWM(self):
+		self.carregaDados()
+		self.escreverXorg()
 	def inicializa(self):
 		self.carregaDados()
 		self.inicializaX()
@@ -431,13 +510,20 @@ class SessaoMultiseat:
 										seatThread.seat.remover_dispositivo(None, potencialDispositivo)
 						break;
 
+def main(argv):
+	try:
+		if('x' in argv):
+			glib.threads_init()
+			s = SessaoMultiseat()
+			s.inicializa()
+			time.sleep(30)
+			s.desligaTudo()
+		else:
+			s = SessaoMultiseat()
+			s.inicializaWM()
+	except:
+		logging.exception('')
 
-try:
-	glib.threads_init()
-	s = SessaoMultiseat()
-	s.inicializa()
-	time.sleep(35)
-	s.desligaTudo()
-except:
-	logging.exception('')
+if __name__ == "__main__":
+	main(sys.argv[1:])
 
