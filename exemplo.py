@@ -237,7 +237,7 @@ class Seat:
 
 	def iniciaTela(self):
 		with self.lockXephyr:
-			if(self.pidX == None): #or not os.path.isfile(self.arquivoX_tela_virtual)):
+			if(self.pidX == None):
 				args = ['Xephyr', '-br', '-ac', '-fullscreen', '-noreset', '-sw-cursor', self.tela_virtual]
 				if(self.mouse_evento != None):
 					args.append('-mouse')
@@ -347,9 +347,7 @@ class SessaoMultiseat:
 	def __init__(self):
 		self.seats = []
 		self.threadEventos = ThreadEventos(self)
-		self.pidX = None
 		self.jsonResultante = None
-		self.arquivoX_tela_real = '/tmp/.X' + str(0) + '-lock'
 	def carregaDados(self):
 		while True:
 			meuMac=obtemMac()
@@ -369,27 +367,10 @@ class SessaoMultiseat:
 				timer.sleep(1)
 				continue
 
-		#print jsonTexto
-		#exit()
 		self.jsonResultante = json.loads(jsonTexto)
 	def inicializaX(self):
-		proc = subprocess.Popen(["startx"])
-		self.pidX = proc.pid
-		#time.sleep(3)
 		env={"DISPLAY":":0"}
 		repete = True
-		logging.info("Iniciando StartX")
-		while(repete):
-			saida = ""
-			pipe = subprocess.Popen(['xset', '-q'], env=env, stdout=subprocess.PIPE)
-			out,err = pipe.communicate()
-
-			if (out != None and "Keyboard" in out) or (err != None and "Keyboard" in err):
-				repete = False
-			else:
-				repete = True
-
-		logging.info("Startx OK")
 		proc = subprocess.Popen(['xsetroot', '-solid', 'green'], env=env)
 		for comando in comandosSessaoX:
 			proc = subprocess.Popen(comando, env=env)
@@ -423,7 +404,6 @@ class SessaoMultiseat:
 		for threadSeat in self.seats:
 			threadSeat.seat.sair = True
 			threadSeat.seat.desligaTela()
-		subprocess.call(['killall', '/usr/lib/xorg/Xorg'])
 	def evento_dispositivo(self, action, device_path):
 		logging.info('evento_dispositivo' + ' acao: ' + action + " device_path" + device_path)
 		if(action == 'remove' or action == 'add'):
