@@ -270,7 +270,7 @@ class Seat:
 						repete = True
 					tentativas+=1
 					if(tentativas >= tentativasMax):
-						raise Exception('Falha ao iniciar Seat apos ' + tentativasMax + ' tentativas')
+						raise Exception('Falha ao iniciar Seat apos ' + str(tentativasMax) + ' tentativas')
 					#time.sleep(0.05)
 
 				for comando in comandosSeat:
