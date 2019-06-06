@@ -11,6 +11,8 @@ import threading
 import logging
 import sys
 import getopt
+import string
+import random
 
 logging.basicConfig(filename='app.log', level=logging.DEBUG)
 
@@ -60,6 +62,17 @@ xorg_confBase2 = [
 ]
 
 lockDevices = threading.Lock()
+
+def textoAleatorio(tamanho=6, letras = string.ascii_uppercase + string.digits):
+	return ''.join(random.choice(letras) for _ in range(tamanho))
+
+def baixarImagemDeFundoDoServidor():
+	caminhoArquivo = '/tmp/fundo'
+	caminhoArquivo += textoAleatorio()
+
+	os.popen('wget -O ' + caminhoArquivo + ' http://10.66.161.11/thinstation/scripts_bash/back.php')
+
+	return caminhoArquivo
 
 def obtemMac():
 	try:
@@ -123,7 +136,8 @@ class EstadoThread:
 	REDETECTAR_DISPOSITIVOS_LEVE = 2
 	PROBLEMA = 3
 	TUDO_OK = 4
-	listaString = ['NOVO', 'REDETECTAR_DISPOSITIVOS', 'REDETECTAR_DISPOSITIVOS_LEVE', 'PROBLEMA', 'TUDO OK']
+	AVISO = 5
+	listaString = ['NOVO', 'REDETECTAR_DISPOSITIVOS', 'REDETECTAR_DISPOSITIVOS_LEVE', 'PROBLEMA', 'TUDO OK', 'AVISO']
 
 class ThreadSeat(threading.Thread):
 	def __init__(self, seat):
@@ -150,9 +164,15 @@ class ThreadSeat(threading.Thread):
 					if(self.seat.pidX == None):
 						self.seat.iniciaTela()
 					self.seat.iniciaRDP()
+				elif(self.seat.estado == EstadoThread.AVISO):
+					if(self.seat.pidX == None):
+						self.seat.iniciaTela()
+					self.seat.exibeAviso()
+					self.seat.problema = []
+					self.seat.mudarEstado(EstadoThread.TUDO_OK)
 				else:
 					logging.error('Estado inválido para a seat ' + str(self.seat.numero) + ": " + str(self.seat.obterEstado()) )
-					self.seat.estado = EstadoThread.NOVO
+					self.seat.mudarEstado(EstadoThread.NOVO)
 
 			self.seat.desligaTela()
 		except:
@@ -166,7 +186,10 @@ class Seat:
 			matar_pid(self.yadPid)
 		self.yadPid = None
 	def exibeAviso(self):
-		args = ['yad', '--center', '--image', 'dialog-question', '--title', 'Atencao', '--text', str(self.problema)]
+		strProblema = ""
+		for linha in self.problema:
+			strProblema += str(linha) + '\n'
+		args = ['yad', '--center', '--image', 'dialog-question', '--title', 'Atencao', '--text', strProblema]
 		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
 		self.yadPid = proc.pid
 		proc.wait()
@@ -174,6 +197,7 @@ class Seat:
 	def mudarEstado(self, estadoNovo):
 		with self.lockEstado:
 			logging.warning('Mudando estado da seat ' + str(self.numero) + ' de ' + self.obterEstadoString() + ' para ' + EstadoThread.listaString[estadoNovo] )
+			self.estadoAnterior = self.estado
 			self.estado = estadoNovo
 	def obterEstado(self):
 		return self.estado
@@ -184,7 +208,9 @@ class Seat:
 		self.teclado_evento = None
 		self.problema = []
 	def __init__(self, numero, teclado, mouse, servidor, usuario, senha, disp_entrada):
+		self.estadoAnterior = EstadoThread.NOVO
 		self.estado = EstadoThread.NOVO
+		self.telaFundo = baixarImagemDeFundoDoServidor()
 		self.lockDispositivo = threading.Lock()
 		self.lockEstado = threading.Lock()
 		self.lockXephyr = threading.Lock()
@@ -304,7 +330,7 @@ class Seat:
 				for comando in comandosSeat:
 					proc = subprocess.Popen(comando, env={"DISPLAY": self.tela_virtual})
 					proc.wait()
-				#proc = subprocess.Popen(['xsetroot', '-solid', 'red'], env={"DISPLAY": self.tela_virtual})
+				subprocess.Popen(['xloadimage', '-onroot', '-fullscreen', self.telaFundo], env={"DISPLAY": self.tela_virtual})
 			else:
 				raise Exception('Nao se pode iniciar mais de um Xephyr por seat se já existe um aberto!')
 	def iniciaRDP(self):
@@ -315,6 +341,9 @@ class Seat:
 			if(err != None and len(err) > 0):
 				self.problema.append(err)
 				self.mudarEstado(EstadoThread.PROBLEMA)
+			if(self.obterEstado() == EstadoThread.TUDO_OK):
+				self.problema.append('Aperte OK para reconectar')
+				self.mudarEstado(EstadoThread.AVISO)
 			self.pidRDP = None
 	def desligaRDP(self):
 		if(self.pidRDP != None):
