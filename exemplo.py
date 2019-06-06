@@ -36,6 +36,34 @@ comandosSeat = [
 	['xset', '-q']
 ]
 
+xorgListaSecoesOriginal = [
+	{
+		"nome": "ServerLayout",
+		"itens": [
+			["Identifier", "X.org gerado pelo Multiseater"],
+			["Option", "Standbytime", "0"],
+			["Option", "SuspendTime", "0"],
+			["Option", "Offtime", "0"],
+			["InputDevice", "Mouse0", "CorePointer"],
+			["InputDevice", "Keyboard0", "CoreKeyboard"]
+		]
+	},
+	{
+		"nome": "InputDevice",
+		"itens": [
+			["Identifier", "Keyboard0"],
+			["Driver", "kbd"]
+		]
+	},
+	{
+		"nome": "InputDevice",
+		"itens": [
+			["Identifier", "Mouse0"],
+			["Driver", "mouse"]
+		]
+	}
+]
+
 xorg_confBase1 = [
 	'Section "ServerLayout"',
 	'	Identifier "X.org gerado pelo Multiseater"',
@@ -62,6 +90,23 @@ xorg_confBase2 = [
 ]
 
 lockDevices = threading.Lock()
+
+def listaParaFormatoXOrgConf(lista):
+	buffer = ""
+	for secao in lista:
+		buffer += "Section \"" + secao['nome'] + "\"\n"
+		for item in secao['itens']:
+			buffer += "\t"
+			for n, palavra in enumerate(item):
+				if(n == 0):
+					buffer += str(palavra)
+				else:
+					buffer += "\"" + str(palavra) + "\""
+				if(n < len(item)):
+					buffer += " "
+			buffer += "\n"
+		buffer += "EndSection\n\n"
+	return buffer
 
 def textoAleatorio(tamanho=6, letras = string.ascii_uppercase + string.digits):
 	return ''.join(random.choice(letras) for _ in range(tamanho))
