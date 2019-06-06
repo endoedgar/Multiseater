@@ -26,6 +26,7 @@ comandosSessaoX = [
 ]
 
 comandosSeat = [
+	['xsetroot', '-cursor_name', 'X_cursor'],
 	['xset', '-dpms',],
 	['xset', 's', '0', '0'],
 	['xset', 's', 'noblank'],
@@ -470,6 +471,8 @@ class SessaoMultiseat:
 			f.write(linha + '\n')
 
 		f.close()
+
+		os.rename('xorgGerado.conf', '/etc/X11/xorg.conf')
 	def inicializaWM(self):
 		self.carregaDados()
 		self.escreverXorg()
@@ -512,7 +515,7 @@ class SessaoMultiseat:
 
 def main(argv):
 	try:
-		if('x' in argv):
+		if('DISPLAY' in os.environ):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
@@ -521,6 +524,11 @@ def main(argv):
 		else:
 			s = SessaoMultiseat()
 			s.inicializaWM()
+			args = [
+				'xinit',
+				os.path.realpath(__file__)
+			]
+			subprocess.Popen(args)
 	except:
 		logging.exception('')
 
