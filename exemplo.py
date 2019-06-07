@@ -64,31 +64,6 @@ xorgListaSecoesOriginal = [
 	}
 ]
 
-xorg_confBase1 = [
-	'Section "ServerLayout"',
-	'	Identifier "X.org gerado pelo Multiseater"',
-	'	Option "Standbytime" "0"',
-	'	Option "SuspendTime" "0"',
-	'	Option "Offtime" "0"',
-	'	InputDevice "Mouse0" "CorePointer"',
-	'	InputDevice "Keyboard0" "CoreKeyboard"'
-]
-
-xorg_confBase2 = [
-	'EndSection',
-	' ',
-	'Section "InputDevice"',
-	'	Identifier "Keyboard0"',
-	'	Driver "kbd"',
-	'EndSection',
-	' ',
-	'Section "InputDevice"',
-	'	Identifier "Mouse0"',
-	'	Driver "mouse"',
-	'EndSection',
-	' '
-]
-
 lockDevices = threading.Lock()
 
 def listaParaFormatoXOrgConf(lista):
@@ -97,13 +72,16 @@ def listaParaFormatoXOrgConf(lista):
 		buffer += "Section \"" + secao['nome'] + "\"\n"
 		for item in secao['itens']:
 			buffer += "\t"
-			for n, palavra in enumerate(item):
-				if(n == 0):
-					buffer += str(palavra)
-				else:
-					buffer += "\"" + str(palavra) + "\""
-				if(n < len(item)):
-					buffer += " "
+			if(isinstance(item, basestring)):
+				buffer += item
+			else:
+				for n, palavra in enumerate(item):
+					if(n == 0):
+						buffer += str(palavra)
+					else:
+						buffer += "\"" + str(palavra) + "\""
+					if(n < len(item)):
+						buffer += " "
 			buffer += "\n"
 		buffer += "EndSection\n\n"
 	return buffer
@@ -499,50 +477,65 @@ class SessaoMultiseat:
 	def escreverXorg(self):
 		f = open('xorgGerado.conf', 'w')
 
-		xorg_confBase = []
-		xorg_confBase.extend(xorg_confBase1)
-		sessaoMonitores = []
-		sessaoDevices = []
-		sessaoScreens = []
+		xorgLista = xorgListaSecoesOriginal
+
+		listaScreens = []
+		listaSecoesMonitores = []
+		listaSecoesDevices = []
+		listaSecoesScreens = []
 
 		nSeat = 0
 		for seat in self.jsonResultante['videos']:
-			sessaoMonitores.append('Section "Monitor"')
-			sessaoMonitores.append('	Identifier "Monitor' + str(nSeat) + '"')
-			sessaoMonitores.append('EndSection')
-			sessaoMonitores.append(' ')
+			sectionMonitor = {
+				"nome": "Monitor",
+				"itens": [
+					["Identifier", "Monitor" + str(nSeat)]
+				]
+			}
+			listaSecoesMonitores.append(sectionMonitor)
 
-			sessaoDevices.append('Section "Device"')
-			sessaoDevices.append('	Identifier "PlacaVideo' + str(nSeat) + '"')
-			sessaoDevices.append('	Driver "' + seat['driver'] + '"')
-			sessaoDevices.append('	BusID "' + seat['busID'] + '"')
+			sectionDevice = {
+				"nome": "Device",
+				"itens": [
+					["Identifier", "PlacaVideo" + str(nSeat)],
+					["Driver", seat['driver']],
+					["BusID", seat['busID']]
+				]
+			}
+
 			if('extra' in seat):
 				for extra in seat['extra']:
-					sessaoDevices.append('	' + extra)
-			sessaoDevices.append('EndSection')
-			sessaoDevices.append(' ')
+					sectionDevice['itens'].append(extra)
 
-			sessaoScreens.append('Section "Screen"')
-			sessaoScreens.append('	Identifier "Screen' + str(nSeat) + '"')
-			sessaoScreens.append('	Device "PlacaVideo' + str(nSeat) + '"')
-			sessaoScreens.append('	Monitor "Monitor' + str(nSeat) + '"')
-			sessaoScreens.append('EndSection')
-			sessaoScreens.append(' ')
+			listaSecoesDevices.append(sectionDevice)
 
-			linhaScreen = '	Screen ' + str(nSeat) + ' "Screen' + str(nSeat) + '" '
+			sectionScreen = {
+				"nome": "Screen",
+				"itens": [
+					["Identifier", "Screen" + str(nSeat)],
+					["Device", "PlacaVideo" + str(nSeat)],
+					["Monitor", "Monitor" + str(nSeat)]
+				]
+			}
+			listaSecoesScreens.append(sectionScreen)
+
+			linhaScreen = 'Screen ' + str(nSeat) + ' "Screen' + str(nSeat) + '" '
 			if(nSeat == 0):
 				linhaScreen += '0 0'
 			else:
 				linhaScreen += 'RightOf "Screen' + str(nSeat-1) + '"'
-			xorg_confBase.append(linhaScreen)
+
+			listaScreens.append(linhaScreen)
 			nSeat += 1
 
-		xorg_confBase.extend(xorg_confBase2)
-		xorg_confBase.extend(sessaoMonitores)
-		xorg_confBase.extend(sessaoDevices)
-		xorg_confBase.extend(sessaoScreens)
-		for linha in xorg_confBase:
-			f.write(linha + '\n')
+		xorgLista[0]['itens'].extend(listaScreens)
+		xorgLista.extend(listaSecoesMonitores)
+		xorgLista.extend(listaSecoesDevices)
+		xorgLista.extend(listaSecoesScreens)
+
+		buf = listaParaFormatoXOrgConf(xorgLista)
+
+		f.write(buf)
 
 		f.close()
 
@@ -593,7 +586,7 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(30)
+			time.sleep(10)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
