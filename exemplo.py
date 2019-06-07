@@ -93,7 +93,7 @@ def baixarImagemDeFundoDoServidor():
 	caminhoArquivo = '/tmp/fundo'
 	caminhoArquivo += textoAleatorio()
 
-	os.popen('wget -O ' + caminhoArquivo + ' http://10.66.161.11/thinstation/scripts_bash/back.php')
+	os.popen('wget -q -o /dev/null -O ' + caminhoArquivo + ' http://10.66.161.11/thinstation/scripts_bash/back.php')
 
 	return caminhoArquivo
 
