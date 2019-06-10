@@ -230,7 +230,7 @@ class Seat:
 		self.mouse_evento = None
 		self.teclado_evento = None
 		self.problema = []
-	def __init__(self, numero, teclado, mouse, servidor, usuario, senha, disp_entrada):
+	def __init__(self, numero, teclado, mouse, servidor, usuario, senha, disp_entrada, tela_real_raiz):
 		self.estadoAnterior = EstadoThread.NOVO
 		self.estado = EstadoThread.NOVO
 		self.telaFundo = baixarImagemDeFundoDoServidor()
@@ -248,7 +248,7 @@ class Seat:
 		self.usuario = usuario
 		self.senha = senha
 		self.disp_entrada = disp_entrada
-		self.tela_real = ':0.'+str(self.numero)
+		self.tela_real = tela_real_raiz+'.'+str(self.numero)
 		self.tela_virtual = ':'+str(self.numero+1)
 		self.arquivoX_tela_virtual =  '/tmp/.X' + str(self.numero+1) + '-lock'
 		self.problema = []
@@ -428,6 +428,7 @@ class SessaoMultiseat:
 		self.seats = []
 		self.threadEventos = ThreadEventos(self)
 		self.jsonResultante = None
+		self.displayX = os.environ.get('DISPLAY')
 	def carregaDados(self):
 		while True:
 			meuMac=obtemMac()
@@ -449,7 +450,7 @@ class SessaoMultiseat:
 
 		self.jsonResultante = json.loads(jsonTexto)
 	def inicializaX(self):
-		env={"DISPLAY":":0"}
+		env={"DISPLAY":self.displayX}
 		repete = True
 		proc = subprocess.Popen(['xsetroot', '-solid', 'green'], env=env)
 		for comando in comandosSessaoX:
@@ -458,7 +459,7 @@ class SessaoMultiseat:
 	def inicializaSeats(self):
 		seatNum = 0
 		for valor in self.jsonResultante['seats']:
-			seat = Seat(seatNum, valor.get('teclado', None), valor.get('mouse', None), valor['servidor']['nome'], valor['usuario'], 'daj2009@', valor.get('disp_entrada', None))
+			seat = Seat(seatNum, valor.get('teclado', None), valor.get('mouse', None), valor['servidor']['nome'], valor['usuario'], 'daj2009@', valor.get('disp_entrada', None), self.displayX)
 			threadSeat = ThreadSeat(seat)
 			self.seats.append(threadSeat)
 			seatNum = seatNum+1
@@ -556,29 +557,33 @@ class SessaoMultiseat:
 	def evento_dispositivo(self, action, device_path):
 		logging.info('evento_dispositivo' + ' acao: ' + action + " device_path" + device_path)
 		if(action == 'remove' or action == 'add'):
-			for seatThread in self.seats:
-				if((seatThread.seat.disp_entrada != None and seatThread.seat.disp_entrada in device_path) or (seatThread.seat.teclado != None and seatThread.seat.teclado in device_path) or (seatThread.seat.mouse != None and seatThread.seat.mouse in device_path)):
-					with seatThread.seat.lockDispositivo:
-						if(seatThread.seat.disp_entrada != None):
-							potencialDispositivo = device_path[device_path.rindex('/')+1:]
-							if(":" in potencialDispositivo):
-								logging.info("Potencial dispositivo usb (" +potencialDispositivo+ ") para a seat " + str(seatThread.seat.numero))
-								tipo = None
-								handlers = obter_handlers_do_dispositivo(potencialDispositivo)
-								if(handlers != None):
-									if("mouse" in handlers):
-										tipo = "mouse"
-									elif("leds" in handlers and "kbd" in handlers):
-										tipo = "teclado"
-									if(tipo != None):
-										if(action == 'add'):
-											seatThread.seat.adicionar_dispositivo(tipo, potencialDispositivo)
-										else:
-											seatThread.seat.remover_dispositivo(tipo, potencialDispositivo)
-								else:
-									if(action == "remove"):
-										seatThread.seat.remover_dispositivo(None, potencialDispositivo)
-						break;
+			if('block' in device_path):
+				logging.info(device_path[device_path.rindex('/')-5:])
+				logging.info("Pen drive?")
+			else:
+				for seatThread in self.seats:
+					if((seatThread.seat.disp_entrada != None and seatThread.seat.disp_entrada in device_path) or (seatThread.seat.teclado != None and seatThread.seat.teclado in device_path) or (seatThread.seat.mouse != None and seatThread.seat.mouse in device_path)):
+						with seatThread.seat.lockDispositivo:
+							if(seatThread.seat.disp_entrada != None):
+								potencialDispositivo = device_path[device_path.rindex('/')+1:]
+								if(":" in potencialDispositivo):
+									logging.info("Potencial dispositivo usb (" +potencialDispositivo+ ") para a seat " + str(seatThread.seat.numero))
+									tipo = None
+									handlers = obter_handlers_do_dispositivo(potencialDispositivo)
+									if(handlers != None):
+										if("mouse" in handlers):
+											tipo = "mouse"
+										elif("leds" in handlers and "kbd" in handlers):
+											tipo = "teclado"
+										if(tipo != None):
+											if(action == 'add'):
+												seatThread.seat.adicionar_dispositivo(tipo, potencialDispositivo)
+											else:
+												seatThread.seat.remover_dispositivo(tipo, potencialDispositivo)
+									else:
+										if(action == "remove"):
+											seatThread.seat.remover_dispositivo(None, potencialDispositivo)
+							break;
 
 def main(argv):
 	try:
@@ -586,7 +591,7 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(10)
+			time.sleep(300)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
