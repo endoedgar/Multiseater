@@ -19,6 +19,7 @@ logging.basicConfig(filename='app.log', level=logging.DEBUG)
 from pyudev import Context, Monitor
 
 comandosSessaoX = [
+	['xhost', '+'],
 	['xsetroot', '-cursor_name', 'X_cursor'],
 	['xset', '-dpms'],
 	['xset', 's', '0', '0'],
@@ -204,6 +205,9 @@ class ThreadSeat(threading.Thread):
 
 
 class Seat:
+	def exibirNotificacao(self, mensagem):
+		args = ['yad', '--center', '--image', 'dialog-question', '--title', 'Notificacao', '--text', str(mensagem), '--no-buttons', '--timeout=5']
+		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
 	def finalizarQualquerAviso(self):
 		if(self.yadPid != None):
 			matar_pid(self.yadPid)
@@ -324,7 +328,7 @@ class Seat:
 					args.append('evdev,,device=/dev/input/'+self.teclado_evento)
 
 
-				logging.info("Abrindo Xephyr para a seat " + str(self.numero))
+				logging.info("Abrindo Xephyr para a seat " + str(self.numero) + " na Tela Real Raiz X " + self.tela_real)
 				proc = subprocess.Popen(args, env={"DISPLAY": self.tela_real})
 				self.pidX = proc.pid
 				logging.info("Xephyr PID: " + str(self.pidX) + " seat " + str(self.numero))
@@ -335,7 +339,7 @@ class Seat:
 				tentativas = 0
 				tentativasMax = 200
 				while(repete):
-					pipe = subprocess.Popen(['xset', '-q'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE)
+					pipe = subprocess.Popen(['xset', '-q'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 					out,err = pipe.communicate()
 
 					logging.info("seat " + str(self.numero) + " " + str(out))
@@ -428,7 +432,7 @@ class SessaoMultiseat:
 		self.seats = []
 		self.threadEventos = ThreadEventos(self)
 		self.jsonResultante = None
-		self.displayX = os.environ.get('DISPLAY')
+		self.displayX = str(os.environ.get('DISPLAY'))
 	def carregaDados(self):
 		while True:
 			meuMac=obtemMac()
@@ -450,6 +454,7 @@ class SessaoMultiseat:
 
 		self.jsonResultante = json.loads(jsonTexto)
 	def inicializaX(self):
+		print "Iniciando X na tela " + self.displayX
 		env={"DISPLAY":self.displayX}
 		repete = True
 		proc = subprocess.Popen(['xsetroot', '-solid', 'green'], env=env)
@@ -558,6 +563,8 @@ class SessaoMultiseat:
 		logging.info('evento_dispositivo' + ' acao: ' + action + " device_path" + device_path)
 		if(action == 'remove' or action == 'add'):
 			if('block' in device_path):
+				for seatThread in self.seats:
+					seatThread.seat.exibirNotificacao('PEN DRIVE INSERIDO?')
 				logging.info(device_path[device_path.rindex('/')-5:])
 				logging.info("Pen drive?")
 			else:
@@ -591,14 +598,15 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(300)
+			time.sleep(100)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
 			s.inicializaWM()
 			args = [
 				'xinit',
-				os.path.realpath(__file__)
+				os.path.realpath(__file__),
+				'vt7'
 			]
 			subprocess.Popen(args)
 	except:
