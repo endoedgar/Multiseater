@@ -98,6 +98,25 @@ def baixarImagemDeFundoDoServidor():
 
 	return caminhoArquivo
 
+def listarParticoesPorDispositivo(bloco):
+	try:
+		dadosBrutos = os.popen('lsblk --output name,size,mountpoint,vendor,model,fstype,label -J').read()
+		dadosJson = json.loads(dadosBrutos)
+
+		for dispositivo in dadosJson['blockdevices']:
+			if(dispositivo['name'] == bloco):
+				return dispositivo
+
+		return None
+	except:
+		return None
+
+def obterParticoesAindaMontadas(bloco):
+	try:
+		return os.popen('cat /proc/mounts | grep /dev/' + bloco + '[0-9] --only-matching').read().split("\n")
+	except:
+		return None
+
 def obtemMac():
 	try:
 		meuMac = os.popen('cat /sys/class/net/$(ip route show default | awk \'/default/ {print $5}\')/address').read().strip()
@@ -362,7 +381,7 @@ class Seat:
 				raise Exception('Nao se pode iniciar mais de um Xephyr por seat se já existe um aberto!')
 	def iniciaRDP(self):
 		if(self.pidX != None):
-			proc = subprocess.Popen(['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/', '/f'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE)
+			proc = subprocess.Popen(['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/', '/f'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 			self.pidRDP = proc.pid
 			out, err = proc.communicate()
 			if(err != None and len(err) > 0):
@@ -440,7 +459,7 @@ class SessaoMultiseat:
 				break
 			else:
 				print("Placa de rede nao encontrada, o cabo de rede está OK?")
-				timer.sleep(1)
+				time.sleep(1)
 				continue
 
 		while True:
@@ -449,7 +468,7 @@ class SessaoMultiseat:
 				break
 			else:
 				print("Falha ao carregar configuracoes do servidor para este terminal, o cabo de rede está OK?")
-				timer.sleep(1)
+				time.sleep(1)
 				continue
 
 		self.jsonResultante = json.loads(jsonTexto)
@@ -563,10 +582,36 @@ class SessaoMultiseat:
 		logging.info('evento_dispositivo' + ' acao: ' + action + " device_path" + device_path)
 		if(action == 'remove' or action == 'add'):
 			if('block' in device_path):
-				for seatThread in self.seats:
-					seatThread.seat.exibirNotificacao('PEN DRIVE INSERIDO?')
-				logging.info(device_path[device_path.rindex('/')-5:])
-				logging.info("Pen drive?")
+				hmm = device_path[device_path.rindex('/')-5:]
+				if(hmm.startswith('block')):
+					bloco = hmm[hmm.rindex('/')+1:]
+					if(action == 'add'):
+						acao = 'inserido'
+					else:
+						acao = 'removido'
+
+					msg = 'Dispositivo de armazenamento em massa ' + str(acao) + ' ' + bloco + "\n"
+					if(action == 'add'):
+						time.sleep(1)
+						objetoDispositivo = listarParticoesPorDispositivo(bloco)
+						msg += 'Nome: ' + str(objetoDispositivo['vendor']) + " " + str(objetoDispositivo['model']) + " (Tamanho " + str(objetoDispositivo.get('size')) + ")" + "\n"
+						if("children" in objetoDispositivo):
+							#msg += str(objetoDispositivo["children"]) + "\n"
+							for particao in objetoDispositivo['children']:
+								msg += "Particao " + particao['mountpoint'][particao['mountpoint'].rindex('/')+1:] + " tipo " + str(particao['fstype']) + "\n"
+							msg += "Abra o icone Este Computador e Clique na Pasta Pendrives para visualizar."
+						else:
+							msg += 'NAO FOI LOCALIZADA UMA PARTICAO VALIDA NESTE DISPOSITIVO!!'
+					elif(action == 'remove'):
+						particoes = obterParticoesAindaMontadas(bloco)
+						if(particoes != None and len(particoes) > 0):
+							msg += "DISPOSITIVO NAO FOI EJETADO CORRETAMENTE. PODE HAVER PERDA DE DADOS."
+
+						for particao in particoes:
+							logging.info('Desmontando ' + particao)
+							os.popen('umount ' + particao)
+					for seatThread in self.seats:
+						seatThread.seat.exibirNotificacao(msg)
 			else:
 				for seatThread in self.seats:
 					if((seatThread.seat.disp_entrada != None and seatThread.seat.disp_entrada in device_path) or (seatThread.seat.teclado != None and seatThread.seat.teclado in device_path) or (seatThread.seat.mouse != None and seatThread.seat.mouse in device_path)):
@@ -598,7 +643,7 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(100)
+			time.sleep(60)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
