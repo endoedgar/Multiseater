@@ -67,6 +67,11 @@ xorgListaSecoesOriginal = [
 
 lockDevices = threading.Lock()
 
+def desmontar(particao):
+	if(particao != None):
+		os.popen('umount ' + str(particao))
+		os.popen('rmdir '+ str(particao))
+
 def listaParaFormatoXOrgConf(lista):
 	buffer = ""
 	for secao in lista:
@@ -256,23 +261,37 @@ class Seat:
 			'dialog-question', '--title', 'Atencao',
 			 '--text', mensagem]
 
+		listaDispositivos = []
+
 		for dispositivo in dispositivosRemoviveis:
 			labelDoBotao = str(str(dispositivo['vendor']).strip() + ' ' + str(dispositivo['model']).strip() + ' ' + str(dispositivo['size']).strip())
 			if 'children' in dispositivo:
-				labelDoBotao += ' ( '
+				adiciona = False
 				for mount in dispositivo['children']:
-					labelDoBotao += mount['mountpoint'][mount['mountpoint'].rindex('/')+1:]
-				labelDoBotao += ' )'
-			args.extend(['--field=' + labelDoBotao + ':fbtn'])
+					if('mountpoint' in mount and mount['mountpoint'] != None and len(mount['mountpoint']) > 0):
+						if(adiciona == False):
+							labelDoBotao += ' ( '
+						labelDoBotao += mount['mountpoint'][mount['mountpoint'].rindex('/')+1:]
+						adiciona = True
+				if(adiciona == True):
+					labelDoBotao += ' )'
+					args.extend(['--button=' + labelDoBotao + ''])
+					listaDispositivos.append(dispositivo)
 
-		args.extend(['--button=gtk-cancel:1'])
+		args.extend(['--button=gtk-cancel:254'])
 
 		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
 		self.yadPid = proc.pid
 		proc.wait()
 
-		if(proc.returncode == 0):
+		if(proc.returncode == 254):
 			self.mudarEstado(EstadoThread.AVISO)
+		else:
+			dispositivoSelecionado = listaDispositivos[proc.returncode]
+			if('children' in dispositivoSelecionado):
+				for particao in dispositivoSelecionado['children']:
+					desmontar(particao['mountpoint'])
+			time.sleep(1)
 		self.yadPid = None
 	def exibeAviso(self):
 		strProblema = ""
@@ -650,18 +669,22 @@ class SessaoMultiseat:
 							#msg += str(objetoDispositivo["children"]) + "\n"
 							for particao in objetoDispositivo['children']:
 								msg += "Particao " + particao['mountpoint'][particao['mountpoint'].rindex('/')+1:] + " tipo " + str(particao['fstype']) + "\n"
-							msg += "Abra o icone Este Computador e Clique na Pasta Pendrives para visualizar."
+							msg += "Abra o icone Este Computador e Clique na Pasta Pendrives para visualizar.\n"
+							msg += "PARA EJETAR: Clique em Sair e Dispositivos USB"
 						else:
 							msg += 'NAO FOI LOCALIZADA UMA PARTICAO VALIDA NESTE DISPOSITIVO!!'
 					elif(action == 'remove'):
 						particoes = obterParticoesAindaMontadas(bloco)
 						if(particoes != None and len(particoes) > 0):
-							msg += "DISPOSITIVO NAO FOI EJETADO CORRETAMENTE. PODE HAVER PERDA DE DADOS."
-
-						for particao in particoes:
-							logging.info('Desmontando ' + particao)
-							os.popen('umount ' + particao)
-							os.popen('rmdir '+ particao)
+							particoesMontadas = 0
+							for particao in particoes:
+								particao = particao.strip()
+								if(len(particao) > 0):
+									logging.info('Desmontando ' + particao)
+									desmontar(particao)
+									particoesMontadas += 1
+							if(particoesMontadas > 0):
+								msg += "DISPOSITIVO NAO FOI EJETADO CORRETAMENTE. PODE HAVER PERDA DE DADOS."
 					for seatThread in self.seats:
 						seatThread.seat.exibirNotificacao(msg)
 			else:
@@ -695,7 +718,7 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(20)
+			time.sleep(60)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
