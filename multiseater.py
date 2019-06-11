@@ -299,14 +299,14 @@ class Seat:
 			strProblema += str(linha) + '\n'
 		args = ['yad', '--center', '--image', 
 			'dialog-question', '--title', 'Atencao',
-			 '--text', strProblema, '--button',  'OK', '--button' ,"Dispositivos USB"]
+			 '--text', strProblema, '--button',  'OK:11', '--button' ,"Dispositivos USB:10"]
 		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
 		self.yadPid = proc.pid
 		proc.wait()
 
-		if(proc.returncode == 1):
+		if(proc.returncode == 10):
 			self.mudarEstado(EstadoThread.EJETAR_DISPOSITIVOS)
-		else:
+		elif(proc.returncode == 11):
 			self.problema = []
 			self.mudarEstado(EstadoThread.TUDO_OK)
 		self.yadPid = None
