@@ -111,6 +111,20 @@ def listarParticoesPorDispositivo(bloco):
 	except:
 		return None
 
+def listarDispositivosRemoviveis():
+	try:
+		dadosBrutos = os.popen('lsblk --output name,size,mountpoint,vendor,model,fstype,label -J').read()
+		dadosJson = json.loads(dadosBrutos)
+
+		retorno = []
+		for device in dadosJson['blockdevices']:
+			if(device['name'] not in ['fd0', 'sda']):
+				retorno.append(device)
+
+		return retorno
+	except:
+		return None
+
 def obterParticoesAindaMontadas(bloco):
 	try:
 		return os.popen('cat /proc/mounts | grep /dev/' + bloco + '[0-9] --only-matching').read().split("\n")
@@ -180,7 +194,8 @@ class EstadoThread:
 	PROBLEMA = 3
 	TUDO_OK = 4
 	AVISO = 5
-	listaString = ['NOVO', 'REDETECTAR_DISPOSITIVOS', 'REDETECTAR_DISPOSITIVOS_LEVE', 'PROBLEMA', 'TUDO OK', 'AVISO']
+	EJETAR_DISPOSITIVOS = 6
+	listaString = ['NOVO', 'REDETECTAR_DISPOSITIVOS', 'REDETECTAR_DISPOSITIVOS_LEVE', 'PROBLEMA', 'TUDO OK', 'AVISO', 'EJETAR_DISPOSITIVOS']
 
 class ThreadSeat(threading.Thread):
 	def __init__(self, seat):
@@ -211,8 +226,10 @@ class ThreadSeat(threading.Thread):
 					if(self.seat.pidX == None):
 						self.seat.iniciaTela()
 					self.seat.exibeAviso()
-					self.seat.problema = []
-					self.seat.mudarEstado(EstadoThread.TUDO_OK)
+				elif(self.seat.estado == EstadoThread.EJETAR_DISPOSITIVOS):
+					if(self.seat.pidX == None):
+						self.seat.iniciaTela()
+					self.seat.exibirTelaDeEjetarDispositivos()
 				else:
 					logging.error('Estado inválido para a seat ' + str(self.seat.numero) + ": " + str(self.seat.obterEstado()) )
 					self.seat.mudarEstado(EstadoThread.NOVO)
@@ -231,14 +248,48 @@ class Seat:
 		if(self.yadPid != None):
 			matar_pid(self.yadPid)
 		self.yadPid = None
+	def exibirTelaDeEjetarDispositivos(self):
+		dispositivosRemoviveis = listarDispositivosRemoviveis()
+		mensagem = "Selecione o Dispositivo USB a ser ejetado."
+
+		args = ['yad', '--form', '--center', '--image',
+			'dialog-question', '--title', 'Atencao',
+			 '--text', mensagem]
+
+		for dispositivo in dispositivosRemoviveis:
+			labelDoBotao = str(str(dispositivo['vendor']).strip() + ' ' + str(dispositivo['model']).strip() + ' ' + str(dispositivo['size']).strip())
+			if 'children' in dispositivo:
+				labelDoBotao += ' ( '
+				for mount in dispositivo['children']:
+					labelDoBotao += mount['mountpoint'][mount['mountpoint'].rindex('/')+1:]
+				labelDoBotao += ' )'
+			args.extend(['--field=' + labelDoBotao + ':fbtn'])
+
+		args.extend(['--button=gtk-cancel:1'])
+
+		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
+		self.yadPid = proc.pid
+		proc.wait()
+
+		if(proc.returncode == 0):
+			self.mudarEstado(EstadoThread.AVISO)
+		self.yadPid = None
 	def exibeAviso(self):
 		strProblema = ""
 		for linha in self.problema:
 			strProblema += str(linha) + '\n'
-		args = ['yad', '--center', '--image', 'dialog-question', '--title', 'Atencao', '--text', strProblema]
+		args = ['yad', '--center', '--image', 
+			'dialog-question', '--title', 'Atencao',
+			 '--text', strProblema, '--button',  'OK', '--button' ,"Dispositivos USB"]
 		proc = subprocess.Popen(args, env={"DISPLAY":self.tela_virtual})
 		self.yadPid = proc.pid
 		proc.wait()
+
+		if(proc.returncode == 1):
+			self.mudarEstado(EstadoThread.EJETAR_DISPOSITIVOS)
+		else:
+			self.problema = []
+			self.mudarEstado(EstadoThread.TUDO_OK)
 		self.yadPid = None
 	def mudarEstado(self, estadoNovo):
 		with self.lockEstado:
@@ -384,9 +435,9 @@ class Seat:
 			proc = subprocess.Popen(['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/', '/f'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 			self.pidRDP = proc.pid
 			out, err = proc.communicate()
-			if(err != None and len(err) > 0):
-				self.problema.append(err)
-				self.mudarEstado(EstadoThread.PROBLEMA)
+			#if(err != None and len(err) > 0):
+			#	self.problema.append(err)
+			#	self.mudarEstado(EstadoThread.PROBLEMA)
 			if(self.obterEstado() == EstadoThread.TUDO_OK):
 				self.problema.append('Aperte OK para reconectar')
 				self.mudarEstado(EstadoThread.AVISO)
@@ -610,6 +661,7 @@ class SessaoMultiseat:
 						for particao in particoes:
 							logging.info('Desmontando ' + particao)
 							os.popen('umount ' + particao)
+							os.popen('rmdir '+ particao)
 					for seatThread in self.seats:
 						seatThread.seat.exibirNotificacao(msg)
 			else:
@@ -643,7 +695,7 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(60)
+			time.sleep(20)
 			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
