@@ -13,6 +13,7 @@ read -p "Informe o nome do usuário a ser instalado o Multiseater: " NOME_USUARI
 
 mv /opt/Multiseater/autoexecProfile.sh /opt/Multiseater_autoexecProfile.sh
 chmod 755 /opt/Multiseater_autoexecProfile.sh
+chown -R $NOMEUSUARIO:$NOMEUSUARIO /opt/Multiseater
 
 inserirLinhaSeNaoExistirNoArquivo "/opt/Multiseater_autoexecProfile.sh" "/home/$NOME_USUARIO/.profile"
 inserirLinhaSeNaoExistirNoArquivo "$NOME_USUARIO  ALL=(ALL)  NOPASSWD:  /opt/Multiseater/multiseater.py" "/etc/sudoers"
