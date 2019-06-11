@@ -718,8 +718,6 @@ def main(argv):
 			glib.threads_init()
 			s = SessaoMultiseat()
 			s.inicializa()
-			time.sleep(60)
-			s.desligaTudo()
 		else:
 			s = SessaoMultiseat()
 			s.inicializaWM()
