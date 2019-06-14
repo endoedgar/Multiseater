@@ -323,7 +323,7 @@ class Seat:
 		self.mouse_evento = None
 		self.teclado_evento = None
 		self.problema = []
-	def __init__(self, numero, teclado, mouse, servidor, usuario, senha, disp_entrada, tela_real_raiz):
+	def __init__(self, numero, teclado, mouse, servidor, usuario, senha, disp_entrada, tela_real_raiz, sessao_multiseat):
 		self.estadoAnterior = EstadoThread.NOVO
 		self.estado = EstadoThread.NOVO
 		self.telaFundo = baixarImagemDeFundoDoServidor()
@@ -346,6 +346,7 @@ class Seat:
 		self.arquivoX_tela_virtual =  '/tmp/.X' + str(self.numero+1) + '-lock'
 		self.problema = []
 		self.sair = False
+		self.sessao_multiseat = sessao_multiseat
 	def atualizarEventosDosDispositivos(self):
 		logging.info('Atualizando eventos dos dispositivos da seat '+ str(self.numero))
 		self.resetarDispositivos()
@@ -451,7 +452,10 @@ class Seat:
 				raise Exception('Nao se pode iniciar mais de um Xephyr por seat se já existe um aberto!')
 	def iniciaRDP(self):
 		if(self.pidX != None):
-			proc = subprocess.Popen(['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/', '/f'], env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+			args = ['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/']
+			if("naoGostaFullscreen" not in self.sessao_multiseat.json_resultante):
+				args.append('/f')
+			proc = subprocess.Popen(args, env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 			self.pidRDP = proc.pid
 			out, err = proc.communicate()
 			#if(err != None and len(err) > 0):
@@ -553,7 +557,7 @@ class SessaoMultiseat:
 	def inicializaSeats(self):
 		seatNum = 0
 		for valor in self.jsonResultante['seats']:
-			seat = Seat(seatNum, valor.get('teclado', None), valor.get('mouse', None), valor['servidor']['nome'], valor['usuario'], 'daj2009@', valor.get('disp_entrada', None), self.displayX)
+			seat = Seat(seatNum, valor.get('teclado', None), valor.get('mouse', None), valor['servidor']['nome'], valor['usuario'], 'daj2009@', valor.get('disp_entrada', None), self.displayX, self)
 			threadSeat = ThreadSeat(seat)
 			self.seats.append(threadSeat)
 			seatNum = seatNum+1
