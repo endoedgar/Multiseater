@@ -453,7 +453,7 @@ class Seat:
 	def iniciaRDP(self):
 		if(self.pidX != None):
 			args = ['xfreerdp', '/v:'+self.servidor, '/u:'+self.usuario, '/d:ETECITAPEVA', '/p:'+self.senha, '/cert-ignore', '/rfx', '/network:lan', '+compression', '-z', '+auto-reconnect','/drive:Pendrives,/media/']
-			if("naoGostaFullscreen" not in self.sessao_multiseat.json_resultante):
+			if("naoGostaFullscreen" not in self.sessao_multiseat.jsonResultante):
 				args.append('/f')
 			proc = subprocess.Popen(args, env={"DISPLAY": self.tela_virtual}, stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 			self.pidRDP = proc.pid
