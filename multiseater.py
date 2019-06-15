@@ -409,7 +409,18 @@ class Seat:
 	def iniciaTela(self):
 		with self.lockXephyr:
 			if(self.pidX == None):
-				args = ['Xephyr', '-br', '-ac', '-fullscreen', '-noreset', '-sw-cursor', self.tela_virtual]
+				minhaConfig = self.sessao_multiseat.jsonResultante['videos'][self.numero]
+				args = ['Xephyr', '-br', '-ac', '-noreset', '-sw-cursor']
+				if('posicionamentoManual' in minhaConfig):
+					pos = minhaConfig['posicionamentoManual']
+					args.append('-screen')
+					args.append(str(pos['w']) + "+" + str(pos['h']) + "+" + str(pos['x'])+"+"+str(pos['y']))
+					self.tela_real = ':0'
+				else:
+					args.append('-fullscreen')
+
+				args.append(self.tela_virtual)
+
 				if(self.mouse_evento != None):
 					args.append('-mouse')
 					args.append('evdev,,device=/dev/input/'+self.mouse_evento)
